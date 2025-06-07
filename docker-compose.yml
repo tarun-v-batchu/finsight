@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DJANGO_SETTINGS_MODULE=finsight_core.settings
+    env_file:
+      - .env
+    depends_on:
+      - db  # Only depends on db if not using redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.75'
+          memory: "1G"
+    volumes:
+      - static_volume:/app/staticfiles
+
+  db:
+    image: postgres:12
+    environment:
+      - POSTGRES_DB=${DB_NAME:-finsight_db}
+      - POSTGRES_USER=${DB_USER:-finsight_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-securepassword}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-finsight_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: "2G"
+    
+  worker:
+    build: .
+    command: celery -A finsight_core worker --loglevel=info
+    depends_on:
+      - redis
+      - db
+    environment:
+      - DJANGO_SETTINGS_MODULE=finsight_core.settings
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - .:/app
+
+  redis:
+    image: redis:6-alpine
+    hostname: redis
+    ports:
+      - "6379:6379"
+
+
+
+volumes:
+  postgres_data:
+  static_volume:

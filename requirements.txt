@@ -1,0 +1,26 @@
+pandas
+python-dotenv
+
+# Core Django
+Django==4.2.21
+djangorestframework==3.16.0
+psycopg2-binary==2.9.10  # PostgreSQL adapter
+
+# AI/ML Components
+scikit-learn==1.4.2     # For classification pipeline
+pandas==2.2.1           # Data processing
+openai==1.82.1          # GPT API integration
+
+# Async Processing
+celery==5.5.2           # Task queue
+redis==6.2.0            # Message broker
+
+# Deployment
+gunicorn==21.2.0        # Production WSGI server
+whitenoise==6.6.0       # Static files
+docker==7.0.0           # Containerization
+
+# Development (optional)
+python-dotenv==1.0.0    # Environment variables
+pytest==8.1.1           # Testing frameworkdjango-redis==5.2.0
+django-redis==5.2.0
