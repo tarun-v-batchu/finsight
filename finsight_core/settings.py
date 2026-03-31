@@ -21,12 +21,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY')  # Will use your raw key
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-insecure-secret-key")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS")
+if DEBUG and not ALLOWED_HOSTS:
+    # Allow local/test traffic without requiring extra env vars.
+    ALLOWED_HOSTS = ["*"]
+elif ALLOWED_HOSTS:
+    ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS.split(",") if h.strip()]
+else:
+    ALLOWED_HOSTS = []
 
 
 # Application definition
@@ -38,6 +45,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "rest_framework",
+    "triage",
 ]
 
 MIDDLEWARE = [
@@ -68,22 +77,36 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = "finsight_backend.wsgi.application"
-
-
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'finsight_db',
-        'USER': 'finsight_user',
-        'PASSWORD': 'securepassword',
-        'HOST': 'db',
-        'PORT': 5432,
+WSGI_APPLICATION = "finsight_core.wsgi.application"
+
+DB_HOST = os.getenv("DB_HOST")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+# Default to SQLite for local development unless Postgres env is provided.
+if DB_HOST or DB_NAME or DB_USER or DB_PASSWORD:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": DB_NAME or "finsight_db",
+            "USER": DB_USER or "finsight_user",
+            "PASSWORD": DB_PASSWORD or "securepassword",
+            "HOST": DB_HOST or "db",
+            "PORT": int(DB_PORT),
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 # Password validation

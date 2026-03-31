@@ -5,7 +5,6 @@ from triage.ml_service import MLTriageService
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'finsight_core.settings')
 app = Celery('finsight_core')
 app.config_from_object('django.conf:settings', namespace='CELERY')
-app.conf.broker_url = 'redis://localhost:6379/0'
 
 ml_service = MLTriageService(openai_api_key=os.getenv('OPENAI_API_KEY'))
 

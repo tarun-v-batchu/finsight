@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from .models import SupportCase, CaseInteraction
+from .models import SupportCase
 from .ml_service import MLTriageService
 from .serializers import SupportCaseSerializer
 import os
@@ -13,6 +13,11 @@ class SupportCaseViewSet(viewsets.ModelViewSet):
     
     def create(self, request):
         description = request.data.get('description')
+        if not description or not isinstance(description, str):
+            return Response(
+                {"detail": "Field 'description' is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         case_type, confidence = ml_service.hybrid_predict(description)
         
         case = SupportCase.objects.create(

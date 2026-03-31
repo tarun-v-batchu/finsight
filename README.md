@@ -27,6 +27,75 @@ At its core is a **hybrid triage pipeline**:
    - if ML confidence is below a threshold, calls the **LLM classifier**
 4. The API persists the result to `SupportCase` and returns the response JSON.
 
+## Architecture diagram
+
+GitHub renders fenced `mermaid` blocks in Markdown (e.g. this `README` on the repo home page). If a diagram does not show, use [Mermaid Live](https://mermaid.live) to preview or export PNG/SVG.
+
+```mermaid
+flowchart TB
+    subgraph Client["Client"]
+        U[User / API client]
+    end
+
+    subgraph API["Django + DRF"]
+        R["POST /api/support-cases/<br/>SupportCaseViewSet.create()"]
+        V["triage/views.py"]
+    end
+
+    subgraph ML["Triage logic"]
+        H["MLTriageService.hybrid_predict()<br/>triage/ml_service.py"]
+        RULE["Rules<br/>e.g. keyword → LOCKOUT"]
+        MLMODEL["ML if trained<br/>TF-IDF + RandomForest"]
+        LLM["LLM fallback<br/>predict_with_llm → OpenAI"]
+    end
+
+    subgraph DB["Persistence"]
+        SC["SupportCase<br/>triage/models.py"]
+    end
+
+    subgraph Response["Response"]
+        OUT["201 JSON: case_id, predicted_type, confidence"]
+    end
+
+    U --> R --> V
+    V --> H
+    H --> RULE
+    RULE -->|match| OUT
+    RULE -->|no match| MLMODEL
+    MLMODEL -->|trained + conf ≥ 0.7| OUT
+    MLMODEL -->|untrained or low ML confidence| LLM
+    LLM --> OUT
+    V --> SC
+    SC --> OUT
+
+    subgraph Optional["Optional: batch async if invoked"]
+        T["process_batch_triage()<br/>finsight_core/celery.py"]
+        REDIS[("Redis broker + results")]
+        W["Celery worker"]
+    end
+
+    T -.->|enqueue| REDIS
+    REDIS -.-> W
+    W -.-> H
+```
+
+Simplified one-lane view:
+
+```mermaid
+flowchart LR
+    A[POST description] --> B[DRF ViewSet]
+    B --> C[hybrid_predict]
+    C --> D{Rules?}
+    D -->|yes| E[label + confidence]
+    D -->|no| F{ML trained?}
+    F -->|no / low confidence| G[LLM classify]
+    F -->|high confidence| H[ML label + confidence]
+    G --> E
+    H --> E
+    B --> I[(SupportCase DB)]
+    E --> J[JSON response]
+```
+
 ## Main modules and where to look in code
 
 - **API layer (DRF)**: `triage/views.py`
@@ -70,7 +139,7 @@ This starts:
 The create flow expects a JSON body with `description`.
 
 ```bash
-curl -X POST http://localhost:8000/your-triage-endpoint \
+curl -X POST http://localhost:8000/api/support-cases/ \
   -H "Content-Type: application/json" \
   -d '{"description":"I think my account got locked after too many attempts"}'
 ```
@@ -94,12 +163,7 @@ Example response shape (from `triage/views.py`):
 
 It returns an accuracy score on a held-out split.
 
-## Notes / current wiring gaps (worth fixing next)
+## Notes
 
-This repo is best read as an **end-to-end backend triage prototype**. A few integration pieces are currently incomplete/inconsistent:
-
-- **URL routing**: `finsight_core/urls.py` only routes `admin/` right now; the `SupportCaseViewSet` isn’t yet registered on a router.
-- **Django settings naming**: there are references to `finsight_backend` in settings (`WSGI_APPLICATION`) that don’t match the `finsight_core` package name.
-- **OpenAI SDK API mismatch**: `triage/ml_service.py` calls `openai.ChatCompletion.create(...)` (older SDK style) while `requirements.txt` pins a newer `openai` package—adjust to the current client API or pin a compatible version.
-
-If you want, I can wire the DRF routes, fix the settings naming, and update the OpenAI call so the stack runs cleanly end-to-end.
+- **Celery**: `process_batch_triage` is defined but not wired from the API yet; enqueue it when you need batch triage off the request thread.
+- **Docker healthcheck**: `docker-compose.yml` uses `curl` against `/health`; ensure `curl` exists in the image or adjust the healthcheck.

@@ -1,2 +1,12 @@
 .env
 venv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Local DB
+db.sqlite3
+*.sqlite3
